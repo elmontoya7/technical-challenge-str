@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stori - Technical Challenge</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <nav class="navbar navbar-expand-lg bg-light">
+        <div class="container">
+          <a class="navbar-brand" href="#">
+            <img src="/images/stori-logo.svg" alt="Stori" height="30">
+          </a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse me-auto justify-content-end" id="navbarNav">
+            <ul class="navbar-nav">
+              <li class="nav-item">
+                <a class="nav-link" href="#" v-if="hasSession" @click="logout">Salir</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+      <!-- login form -->
+      <div v-if="!hasSession">
+        <div class="container my-5">
+          <div class="row">
+            <div class="col" style="border-right:1px solid rgba(0,0,0,0.2);">
+              <h3 class="mb-3">Registered clients</h3>
+              <form @submit.prevent="login">
+                <div class="mb-3">
+                  <label for="accountNumber" class="form-label">Account number</label>
+                  <input class="form-control" id="accountNumber" placeholder="Your account number" aria-describedby="accountNumberHelp" v-model="account_number" :class="{'is-invalid': account_number_error}">
+                  <div class="invalid-feedback">
+                    The account number is incorrect or does not exist
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary" :disabled="loading">Check my balance</button>
+              </form>
+            </div>
+            <div class="col">
+              <h3 class="mb-3">New clients</h3>
+              <form @submit.prevent="register">
+                <!-- <div class="mb-3">
+                  <label for="accountNumber" class="form-label">Account number</label>
+                  <input class="form-control" id="accountNumber" placeholder="New account number" aria-describedby="accountNumberHelp" v-model="new_account_number" :class="{'is-invalid': new_account_number_error}">
+                  <div id="accountNumberHelp" class="form-text">Provide 8 digits for your new account number</div>
+                  <div class="invalid-feedback">
+                    The account number and email are incorrect or already exist
+                  </div>
+                </div> -->
+                <div class="mb-3">
+                  <label for="email" class="form-label">Email address</label>
+                  <input type="email" class="form-control" id="email" placeholder="Your email" v-model="email" :class="{'is-invalid': new_account_number_error}">
+                  <div class="invalid-feedback">
+                    The email is incorrect or already exist
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary" :disabled="loading">Create account</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else-if="Client">
+        <div class="container my-5">
+          <h2 class="mb-5">Account number: {{ Client.account_number }}</h2>
+          <div class="row">
+            <div class="col">
+              <div class="card mb-5">
+                <div class="card-body">
+                  <h5 class="card-title">Balance</h5>
+                  <p class="card-text">Your current balance</p>
+                  <h4>${{ formatMoney(calculateBalance()) }}</h4>
+                  <p class="bold">Average debit amount: ${{ formatMoney( transactions.filter(t => t.type == 'debit').map(t => t.amount).reduce((t, n) => t - n, 0)) }}</p>
+                  <p class="bold">Average credit amount: ${{ formatMoney( transactions.filter(t => t.type == 'credit').map(t => t.amount).reduce((t, n) => t + n, 0)) }}</p>
+                  <button type="button" class="btn btn-primary" @click="requestSummary">Send by email</button>
+                </div>
+              </div>
+            </div>
+            <div class="col">
+              <div class="card mb-5">
+                <div class="card-body">
+                  <h5 class="card-title">By month</h5>
+                  <p class="card-text">Your transactions summary by month</p>
+                  <p v-for="(value, key, index) in parseTransactionByMonth()" :key="index">{{ key }}: {{ value }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <h4 class="mb-3">Transactions</h4>
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Id</th>
+                <th scope="col">Type</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(transaction, index) in Client.transactions" :key="index">
+                <th scope="row">...{{ transaction._id.slice(-5) }}</th>
+                <td>{{ transaction.type }}</td>
+                <td>{{ transaction.type == 'credit' ? '+' : '-' }} {{ formatMoney(transaction.amount) }}</td>
+                <td>{{ moment(transaction.date).format('DD MMMM YYYY, HH:mm A') }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <script>
+      const { createApp } = Vue
+
+      createApp({
+        data() {
+          return {
+            hasSession: false,
+            account_number: '',
+            new_account_number: '',
+            account_number_error: false,
+            new_account_number_error: false,
+            Client: null,
+            loading: false,
+            moment: moment,
+            email: ''
+          }
+        },
+        mounted () {
+          const Storage = window.localStorage
+          this.hasSession = !!Storage.getItem('str-an')
+          if (this.hasSession) {
+            this.getClient(Storage.getItem('str-an'))
+          }
+        },
+        computed: {
+          transactions () {
+            return !!this.Client ? this.Client.transactions : []
+          }
+        },
+        methods: {
+          logout () {
+            const Storage = window.localStorage
+            Storage.removeItem('str-an')
+            window.location = '/'
+          },
+          async login () {
+            this.account_number_error = false
+
+            if (!this.account_number || isNaN(this.account_number)) {
+              this.account_number_error = true
+              return
+            }
+
+            this.loading = true
+            let response = await fetch('/api/v1/client/' + this.account_number)
+
+            let result = await response.json()
+            if (result.success) {
+              const Storage = window.localStorage
+              Storage.setItem('str-an', this.account_number)
+              this.hasSession = true
+              this.Client = result.resource
+            } else {
+              this.account_number_error = true
+            }
+
+            this.loading = false
+          },
+          async register () {
+            this.new_account_number_error = false
+
+            if (!this.email) {
+              this.new_account_number_error = true
+              return
+            }
+
+            this.loading = true
+            const data = {
+              email: this.email
+            }
+            let response = await fetch('/api/v1/client', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json;charset=utf-8'
+              },
+              body: JSON.stringify(data)
+            })
+
+            let result = await response.json()
+            if (result.success) {
+              const Storage = window.localStorage
+              Storage.setItem('str-an', result.resource.account_number)
+              this.hasSession = true
+              this.getClient(result.resource.account_number)
+            } else {
+              this.new_account_number_error = true
+            }
+
+            this.loading = false
+          },
+          async getClient (account_number) {
+            this.loading = true
+            let response = await fetch('/api/v1/client/' + account_number)
+
+            let result = await response.json()
+            if (result.success) {
+              this.Client = result.resource
+            } else {
+              this.logout()
+            }
+
+            this.loading = false
+          },
+          formatMoney: (amount, decimalCount = 2, decimal = '.', thousands = ',') => {
+            try {
+              decimalCount = Math.abs(decimalCount)
+              decimalCount = isNaN(decimalCount) ? 2 : decimalCount
+
+              const negativeSign = amount < 0 ? '-' : ''
+
+              const i = parseInt(amount = Math.abs(Number(amount) || 0).toFixed(decimalCount)).toString()
+              const j = (i.length > 3) ? i.length % 3 : 0
+
+              return (negativeSign +
+                (j ? i.substr(0, j) + thousands : '') +
+                i.substr(j).replace(/(\d{3})(?=\d)/g, '$1' + thousands) +
+                (decimalCount ? decimal + Math.abs(amount - i).toFixed(decimalCount).slice(2) : '')).replace(/((\.00)|(\.[1-9]0)|(\.[1-9]{1,})|(\.0*[1-9]*))0*$/, '$1')
+            } catch (e) {
+              console.log(e)
+            }
+          },
+          calculateBalance () {
+            let total = 0
+            for (let transaction of this.Client.transactions) {
+              if (transaction.type == 'credit') {
+                total += transaction.amount
+              } else {
+                total -= transaction.amount
+              }
+            }
+
+            return total
+          },
+          parseTransactionByMonth () {
+            let months = {}
+            for (let transaction of this.Client.transactions) {
+              let date = moment(transaction.date)
+              let month = date.format('MMMM')
+              if (months.hasOwnProperty(month)) {
+                months[month] += 1
+              } else {
+                months[month] = 1
+              }
+            }
+
+            return months
+          },
+          async requestSummary () {
+            this.loading = true
+            let response = await fetch('/api/v1/client/' + this.Client.account_number + '/request-summary')
+
+            let result = await response.json()
+            console.log(result)
+            this.sent = result.success
+
+            this.loading = false
+          },
+        }
+      }).mount('#app')
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-kenU1KFdBIe4zVF0s0G1M5b4hcpxyD9F7jL+jjXkk+Q2h455rYXK/7HAuoJl+0I4" crossorigin="anonymous"></script>
+  </body>
+</html>
